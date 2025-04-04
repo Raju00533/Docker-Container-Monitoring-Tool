@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Container Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>Docker Container Monitor</h1>
+            <div id="refresh-time"></div>
+        </header>
+        
+        <div class="container">
+            <div class="sidebar">
+                <h2>Containers</h2>
+                <div id="containers-list" class="containers-list"></div>
+            </div>
+            
+            <div class="main-content">
+                <div id="system-info" class="system-info"></div>
+                <div id="stats-container" class="stats-container"></div>
+                <div id="charts">
+                    <div class="chart-container">
+                        <canvas id="cpu-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="memory-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
