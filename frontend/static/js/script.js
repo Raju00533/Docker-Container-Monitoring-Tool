@@ -184,9 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
         statsContainer.innerHTML = `<p class="error-msg">${message}. Check logs for more.</p>`;
     }
 
-    function scrollToCharts() {
-        document.getElementById('charts')?.scrollIntoView({ behavior: 'smooth' });
-    }
+    
 
     // Make fetchStats globally accessible for HTML inline events
     window.fetchStats = fetchStats;
