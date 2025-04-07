@@ -3,261 +3,294 @@ document.addEventListener('DOMContentLoaded', function () {
     const statsContainer = document.getElementById('stats-container');
     const systemInfo = document.getElementById('system-info');
     const refreshTime = document.getElementById('refresh-time');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // Chart contexts
     const cpuChartCtx = document.getElementById('cpu-chart')?.getContext('2d');
     const memoryChartCtx = document.getElementById('memory-chart')?.getContext('2d');
+    const networkChartCtx = document.getElementById('network-chart')?.getContext('2d');
 
-    let cpuChart, memoryChart;
+    // Chart instances
+    let cpuChart, memoryChart, networkChart;
     let currentContainerId = null;
     const historyData = {};
 
-    initCharts();
-    fetchData();
-    setInterval(fetchData, 2000);
-    // Add to chart initialization
-const networkChartCtx = document.getElementById('network-chart')?.getContext('2d');
-let networkChart;
-
-function initCharts() {
-    // ... existing charts ...
-    
-    // Network I/O Chart
-    networkChart = new Chart(networkChartCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [
-                {
-                    label: 'RX Bytes',
-                    data: [],
-                    borderColor: '#2ecc71',
-                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
-                    fill: true
-                },
-                {
-                    label: 'TX Bytes',
+    // Initialize all charts
+    function initCharts() {
+        // CPU Chart
+        cpuChart = new Chart(cpuChartCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'CPU Usage %',
                     data: [],
                     borderColor: '#3498db',
-                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
-                    fill: true
-                }
-            ]
-        },
-        options: {
+                    backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: chartOptions('Percentage')
+        });
+
+        // Memory Chart
+        memoryChart = new Chart(memoryChartCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Memory Usage %',
+                    data: [],
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.2)',
+                    fill: true,
+                    tension: 0.2
+                }]
+            },
+            options: chartOptions('Percentage')
+        });
+
+        // Network Chart
+        networkChart = new Chart(networkChartCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'RX Bytes',
+                        data: [],
+                        borderColor: '#2ecc71',
+                        backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                        fill: true
+                    },
+                    {
+                        label: 'TX Bytes',
+                        data: [],
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        fill: true
+                    }
+                ]
+            },
+            options: chartOptions('Bytes')
+        });
+    }
+
+    function chartOptions(yAxisLabel) {
+        return {
             responsive: true,
+            maintainAspectRatio: false,
             scales: {
                 y: {
                     beginAtZero: true,
-                    title: { display: true, text: 'Bytes' }
+                    title: {
+                        display: true,
+                        text: yAxisLabel
+                    }
+                },
+                x: {
+                    ticks: {
+                        maxTicksLimit: 10,
+                        autoSkip: true
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    position: 'top'
                 }
             }
+        };
+    }
+
+    async function fetchData() {
+        showLoading();
+        try {
+            // Fetch containers and system info
+            const [containersRes, systemRes] = await Promise.all([
+                fetch('/api/containers'),
+                fetch('/api/system')
+            ]);
+
+            const containers = await containersRes.json();
+            const system = await systemRes.json();
+
+            renderSystemInfo(system);
+            renderContainers(containers);
+
+            if (containers.length) {
+                const validContainer = containers.find(c => c.id === currentContainerId) || containers[0];
+                currentContainerId = validContainer.id;
+                await fetchStats(currentContainerId);
+            } else {
+                clearCharts();
+                statsContainer.innerHTML = `<p class="info-msg">No running containers</p>`;
+            }
+        } catch (error) {
+            showError('Failed to load data', error);
+        } finally {
+            hideLoading();
         }
-    });
-}
+    }
 
-// Add to updateHistory function
-history.networkRx = [];
-history.networkTx = [];
+    async function fetchStats(containerId) {
+        showLoading();
+        try {
+            const [statsRes, networkRes, logsRes] = await Promise.all([
+                fetch(`/api/stats/${containerId}`),
+                fetch(`/api/network/${containerId}`),
+                fetch(`/api/logs/${containerId}`)
+            ]);
 
-// Add to fetchStats function
-fetch(`/api/network/${containerId}`)
-    .then(res => res.json())
-    .then(network => {
-        document.getElementById('rx-bytes').textContent = formatBytes(network.rx_bytes);
-        document.getElementById('tx-bytes').textContent = formatBytes(network.tx_bytes);
-        
-        // Update network history
-        history.networkRx.push(network.rx_bytes);
-        history.networkTx.push(network.tx_bytes);
-        
-        if (history.networkRx.length > 20) {
-            history.networkRx.shift();
-            history.networkTx.shift();
+            const stats = await statsRes.json();
+            const network = await networkRes.json();
+            const logs = await logsRes.json();
+
+            if (stats.error || network.error || logs.error) {
+                throw new Error(stats.error || network.error || logs.error);
+            }
+
+            renderStats(stats);
+            updateNetworkDisplay(network);
+            updateLogsDisplay(logs);
+            updateHistory(containerId, stats, network);
+            updateAllCharts();
+        } catch (error) {
+            showError('Failed to load stats', error);
+        } finally {
+            hideLoading();
         }
-        
-        updateNetworkChart();
-    });
-
-function updateNetworkChart() {
-    if (!currentContainerId || !historyData[currentContainerId]) return;
-    const history = historyData[currentContainerId];
-    
-    networkChart.data.labels = history.timestamps;
-    networkChart.data.datasets[0].data = history.networkRx;
-    networkChart.data.datasets[1].data = history.networkTx;
-    networkChart.update();
-}
-    function fetchData() {
-        updateRefreshTime();
-
-        fetch('/api/containers')
-            .then(res => res.json())
-            .then(containers => {
-                renderContainers(containers);
-                if (containers.length) {
-                    if (!currentContainerId || !containers.find(c => c.id === currentContainerId)) {
-                        currentContainerId = containers[0].id;
-                    }
-                    fetchStats(currentContainerId);
-                } else {
-                    statsContainer.innerHTML = `<p class="info-msg">No running containers</p>`;
-                    clearCharts();
-                }
-            })
-            .catch(err => showError('Error loading containers', err));
-
-        fetch('/api/system')
-            .then(res => res.json())
-            .then(system => renderSystemInfo(system))
-            .catch(err => showError('Error loading system info', err));
     }
 
-    function fetchStats(containerId) {
-        currentContainerId = containerId;
-        statsContainer.innerHTML = `<p class="loading">Fetching stats...</p>`;
-
-        fetch(`/api/stats/${containerId}`)
-            .then(res => res.json())
-            .then(stats => {
-                renderStats(stats);
-                updateHistory(containerId, stats);
-                updateCharts();
-                scrollToCharts();
-            })
-            .catch(err => showError('Error loading stats', err));
-    }
-
-    function renderContainers(containers) {
-        containersList.innerHTML = containers.map(container => `
-            <div class="container-item ${container.id === currentContainerId ? 'active' : ''}"
-                role="button" tabindex="0"
-                onclick="fetchStats('${container.id}')"
-                onkeypress="if(event.key==='Enter') fetchStats('${container.id}')">
-                <div class="container-header">
-                    <span class="status-indicator ${container.status}"></span>
-                    <span class="container-name">${container.name}</span>
-                </div>
-                <span class="container-image">${container.image}</span>
-                <span class="container-status">${container.status}</span>
-            </div>
-        `).join('');
-    }
-
-    function renderStats(stats) {
-        statsContainer.innerHTML = `
-            <h3>Real-time Statistics</h3>
-            <div class="stat-item">
-                <label>CPU Usage:</label>
-                <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.cpu_percent}%; background: ${getUsageColor(stats.cpu_percent)}"></div>
-                    <span>${stats.cpu_percent}%</span>
-                </div>
-            </div>
-            <div class="stat-item">
-                <label>Memory Usage:</label>
-                <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.memory_percent}%; background: ${getUsageColor(stats.memory_percent)}"></div>
-                    <span>${formatBytes(stats.memory_usage)} / ${formatBytes(stats.memory_limit)} (${stats.memory_percent}%)</span>
-                </div>
-            </div>
-            <div class="stat-item"><label>Processes:</label><span>${stats.pids}</span></div>
-            <div class="stat-item"><label>Last Updated:</label><span>${new Date(stats.time).toLocaleTimeString()}</span></div>
-        `;
-    }
-
-    function renderSystemInfo(system) {
-        systemInfo.innerHTML = `
-            <h3>Docker System Information</h3>
-            <div class="system-grid">
-                <div class="system-item"><label>Containers:</label><span>${system.ContainersRunning} running / ${system.Containers} total</span></div>
-                <div class="system-item"><label>Images:</label><span>${system.Images}</span></div>
-                <div class="system-item"><label>Docker Version:</label><span>${system.ServerVersion}</span></div>
-                <div class="system-item"><label>OS:</label><span>${system.OperatingSystem}</span></div>
-                <div class="system-item"><label>Hostname:</label><span>${system.Name}</span></div>
-                <div class="system-item"><label>Memory:</label><span>${formatBytes(system.MemTotal)}</span></div>
-            </div>
-        `;
-    }
-
-    function initCharts() {
-        cpuChart = new Chart(cpuChartCtx, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'CPU %', data: [], borderColor: '#3498db', backgroundColor: 'rgba(52, 152, 219, 0.2)', fill: true, tension: 0.2 }] },
-            options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
-        });
-
-        memoryChart = new Chart(memoryChartCtx, {
-            type: 'line',
-            data: { labels: [], datasets: [{ label: 'Memory %', data: [], borderColor: '#2ecc71', backgroundColor: 'rgba(46, 204, 113, 0.2)', fill: true, tension: 0.2 }] },
-            options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
-        });
-    }
-
-    function updateHistory(containerId, stats) {
+    function updateHistory(containerId, stats, network) {
         if (!historyData[containerId]) {
-            historyData[containerId] = { timestamps: [], cpu: [], memory: [] };
+            historyData[containerId] = {
+                timestamps: [],
+                cpu: [],
+                memory: [],
+                rx: [],
+                tx: []
+            };
         }
 
         const history = historyData[containerId];
         const now = new Date(stats.time);
 
-        history.timestamps.push(now.toLocaleTimeString());
-        history.cpu.push(stats.cpu_percent);
-        history.memory.push(stats.memory_percent);
-
-        if (history.timestamps.length > 20) {
+        // Keep maximum 20 data points
+        if (history.timestamps.length >= 20) {
             history.timestamps.shift();
             history.cpu.shift();
             history.memory.shift();
+            history.rx.shift();
+            history.tx.shift();
         }
+
+        // Add new data
+        history.timestamps.push(now.toLocaleTimeString());
+        history.cpu.push(stats.cpu_percent);
+        history.memory.push(stats.memory_percent);
+        history.rx.push(network.rx_bytes);
+        history.tx.push(network.tx_bytes);
     }
 
-    function updateCharts() {
-        if (!currentContainerId || !historyData[currentContainerId]) return;
+    function updateAllCharts() {
         const history = historyData[currentContainerId];
+        if (!history) return;
 
+        // CPU Chart
         cpuChart.data.labels = history.timestamps;
         cpuChart.data.datasets[0].data = history.cpu;
         cpuChart.update();
 
+        // Memory Chart
         memoryChart.data.labels = history.timestamps;
         memoryChart.data.datasets[0].data = history.memory;
         memoryChart.update();
+
+        // Network Chart
+        networkChart.data.labels = history.timestamps;
+        networkChart.data.datasets[0].data = history.rx;
+        networkChart.data.datasets[1].data = history.tx;
+        networkChart.update();
     }
 
-    function clearCharts() {
-        cpuChart.data.labels = [];
-        cpuChart.data.datasets[0].data = [];
-        cpuChart.update();
-
-        memoryChart.data.labels = [];
-        memoryChart.data.datasets[0].data = [];
-        memoryChart.update();
+    function updateNetworkDisplay(network) {
+        document.getElementById('rx-bytes').textContent = formatBytes(network.rx_bytes);
+        document.getElementById('tx-bytes').textContent = formatBytes(network.tx_bytes);
     }
 
-    function updateRefreshTime() {
-        refreshTime.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+    function updateLogsDisplay(logs) {
+        const formatLogEntry = (log) => {
+            const timestampMatch = log.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+Z)/);
+            if (timestampMatch) {
+                return `<div class="log-line">
+                    <span class="log-time">${timestampMatch[1]}</span>
+                    ${log.replace(timestampMatch[0], '')}
+                </div>`;
+            }
+            return `<div class="log-line">${log}</div>`;
+        };
+
+        document.getElementById('access-logs').innerHTML = 
+            logs.access?.map(formatLogEntry).join('') || 'No access logs';
+            
+        document.getElementById('error-logs').innerHTML = 
+            logs.error?.map(log => `<div class="log-line error">${formatLogEntry(log)}</div>`).join('') || 'No error logs';
     }
 
+    // Helper functions
     function formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024, sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+        if (typeof bytes !== 'number') return '0 Bytes';
+        const units = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
     }
 
-    function getUsageColor(percent) {
-        if (percent < 50) return '#2ecc71';
-        if (percent < 80) return '#f39c12';
-        return '#e74c3c';
+    function showLoading() {
+        loadingOverlay.style.display = 'flex';
+    }
+
+    function hideLoading() {
+        loadingOverlay.style.display = 'none';
     }
 
     function showError(message, error) {
         console.error(message, error);
-        statsContainer.innerHTML = `<p class="error-msg">${message}. Check logs for more.</p>`;
+        statsContainer.innerHTML = `
+            <div class="error-msg">
+                <h4>${message}</h4>
+                <p>${error?.message || 'Unknown error'}</p>
+            </div>
+        `;
     }
 
-    
+    // Initialization
+    initCharts();
+    fetchData();
+    setInterval(fetchData, 2000);
 
-    // Make fetchStats globally accessible for HTML inline events
+    // Make functions available globally for HTML event handlers
     window.fetchStats = fetchStats;
+    window.switchLogs = function(type) {
+        document.querySelectorAll('.log-output').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.log-tab').forEach(el => el.classList.remove('active'));
+        document.getElementById(`${type}-logs`).classList.add('active');
+        document.querySelector(`[data-log-type="${type}"]`).classList.add('active');
+    };
+
+    window.filterLogs = function() {
+        const searchTerm = document.getElementById('log-search').value.toLowerCase();
+        const activeLogs = document.querySelector('.log-output.active');
+        
+        Array.from(activeLogs.children).forEach(line => {
+            const text = line.textContent.toLowerCase();
+            line.style.display = text.includes(searchTerm) ? 'block' : 'none';
+        });
+    };
+
+    window.clearLogs = function() {
+        document.getElementById('access-logs').innerHTML = '';
+        document.getElementById('error-logs').innerHTML = '';
+    };
 });
