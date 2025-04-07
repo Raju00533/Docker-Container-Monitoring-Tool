@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chart Instances
     let cpuChart, memoryChart, networkChart;
-    let currentContainerId = null;
+    let currentContainerId = localStorage.getItem('selectedContainerId') || null;
     const historyData = {};
     let isFetching = false;
 
@@ -124,8 +124,11 @@ document.addEventListener('DOMContentLoaded', function() {
             renderContainers(containers);
 
             if (containers.length) {
-                if (!currentContainerId) {
-                    currentContainerId = containers[0].id;
+                // Check if stored container still exists
+                const validContainer = containers.find(c => c.id === currentContainerId) || containers[0];
+                if (currentContainerId !== validContainer.id) {
+                    currentContainerId = validContainer.id;
+                    localStorage.setItem('selectedContainerId', currentContainerId);
                 }
                 await fetchStats(currentContainerId);
             } else {
@@ -198,7 +201,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function renderContainers(containers) {
         containersList.innerHTML = containers.map(container => `
             <div class="container-item ${container.id === currentContainerId ? 'active' : ''}"
-                onclick="window.fetchStats('${container.id}')">
+                onclick="selectContainer('${container.id}')">
                 <div class="container-header">
                     <span class="status-indicator ${container.status}"></span>
                     <span class="container-name">${container.name}</span>
@@ -237,13 +240,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function updateLogsDisplay(logs) {
-        document.getElementById('access-logs').innerHTML = logs.access?.length 
-            ? logs.access.join('\n') 
-            : 'No access logs available';
-            
-        document.getElementById('error-logs').innerHTML = logs.error?.length 
-            ? logs.error.join('\n') 
-            : 'No error logs available';
+        const formatLog = (log) => {
+            if (!log) return '';
+            // Handle both string logs and object logs
+            if (typeof log === 'object') {
+                return JSON.stringify(log, null, 2);
+            }
+            return log;
+        };
+
+        const accessLogsElement = document.getElementById('access-logs');
+        const errorLogsElement = document.getElementById('error-logs');
+
+        accessLogsElement.innerHTML = logs.access?.length 
+            ? logs.access.map(log => `<div class="log-line">${formatLog(log)}</div>`).join('')
+            : '<div class="info-msg">No access logs available</div>';
+
+        errorLogsElement.innerHTML = logs.error?.length
+            ? logs.error.map(log => `<div class="log-line error">${formatLog(log)}</div>`).join('')
+            : '<div class="info-msg">No error logs available</div>';
     }
 
     function updateHistory(containerId, stats, network) {
@@ -279,6 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateAllCharts() {
         const history = historyData[currentContainerId];
+        if (!history) return;
         
         cpuChart.data.labels = history.timestamps;
         cpuChart.data.datasets[0].data = history.cpu;
@@ -326,11 +342,20 @@ document.addEventListener('DOMContentLoaded', function() {
         return '#e74c3c';
     }
 
+    // Container selection handler
+    window.selectContainer = function(containerId) {
+        currentContainerId = containerId;
+        localStorage.setItem('selectedContainerId', containerId);
+        fetchStats(containerId);
+        
+        // Update active state in UI
+        document.querySelectorAll('.container-item').forEach(item => {
+            item.classList.toggle('active', item.getAttribute('onclick').includes(containerId));
+        });
+    };
+
     // Initialize and start updating
     initCharts();
     fetchData();
     setInterval(fetchData, 5000); // Update every 5 seconds
-
-    // Make functions available globally
-    window.fetchStats = fetchStats;
 });
