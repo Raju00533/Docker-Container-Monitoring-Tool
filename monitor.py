@@ -69,26 +69,35 @@ class DockerMonitor:
             return {"rx_bytes": 0, "tx_bytes": 0, "error": str(e)}
 
     def get_container_logs(self, container_id, tail=100):
-        """Improved log retrieval with better filtering and error handling"""
+        """Return both access and error logs in structured format"""
         try:
             container = self.client.containers.get(container_id)
-            
-            # Get logs with timestamps
             logs = container.logs(
                 tail=tail,
                 timestamps=True,
                 follow=False
             ).decode('utf-8', errors='replace').split('\n')
-
-            # Improved regex patterns
-            access_pattern = re.compile(r'("GET|POST|PUT|DELETE|HEAD)\s+.*HTTP/\d\.\d"\s+(2\d{2}|3\d{2})')
-            error_pattern = re.compile(r'(error|exception|fail|5\d{2}|segfault|alert|critical)', re.IGNORECASE)
-
+    
+            # Improved log filtering
+            access_logs = []
+            error_logs = []
+            
+            for log in logs:
+                if not log.strip():
+                    continue
+                if 'error' in log.lower() or 'exception' in log.lower() or 'fail' in log.lower():
+                    error_logs.append(log)
+                else:
+                    access_logs.append(log)
+    
             return {
-                'access': [log for log in logs if access_pattern.search(log)],
-                'error': [log for log in logs if error_pattern.search(log)],
-                'raw': logs
+                'access': access_logs[-tail:],  # Return only the requested number of lines
+                'error': error_logs[-tail:],
+                'raw': logs[-tail:]
             }
         except Exception as e:
-            print(f"Log Retrieval Error: {str(e)}")
-            return {'error': str(e)}
+            return {
+                'error': str(e),
+                'access': [],
+                'error': []
+            }
