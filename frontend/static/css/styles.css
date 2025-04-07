@@ -401,3 +401,20 @@ header {
     border-radius: 4px;
     margin: 1rem 0;
 }
+
+
+.info-msg {
+    color: #3498db;
+    padding: 1rem;
+    background: rgba(52, 152, 219, 0.1);
+    border-radius: 4px;
+    text-align: center;
+}
+
+.error-msg {
+    color: #e74c3c;
+    padding: 1rem;
+    background: rgba(231, 76, 60, 0.1);
+    border-radius: 4px;
+    margin: 1rem 0;
+}
