@@ -1,24 +1,24 @@
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', function() {
     // DOM Elements
     const containersList = document.getElementById('containers-list');
     const statsContainer = document.getElementById('stats-container');
     const systemInfo = document.getElementById('system-info');
     const refreshTime = document.getElementById('refresh-time');
-    const loadingOverlay = document.getElementById('loading-overlay');
     
     // Chart Contexts
-    const cpuChartCtx = document.getElementById('cpu-chart')?.getContext('2d');
-    const memoryChartCtx = document.getElementById('memory-chart')?.getContext('2d');
-    const networkChartCtx = document.getElementById('network-chart')?.getContext('2d');
+    const cpuChartCtx = document.getElementById('cpu-chart').getContext('2d');
+    const memoryChartCtx = document.getElementById('memory-chart').getContext('2d');
+    const networkChartCtx = document.getElementById('network-chart').getContext('2d');
 
     // Chart Instances
     let cpuChart, memoryChart, networkChart;
     let currentContainerId = null;
     const historyData = {};
+    let isFetching = false;
 
     // Initialize all charts
     function initCharts() {
-        // CPU Chart
+        // CPU Chart (0-100%)
         cpuChart = new Chart(cpuChartCtx, {
             type: 'line',
             data: {
@@ -29,13 +29,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     borderColor: '#3498db',
                     backgroundColor: 'rgba(52, 152, 219, 0.2)',
                     fill: true,
-                    tension: 0.2
+                    tension: 0.1
                 }]
             },
-            options: getChartOptions('Percentage')
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        title: { display: true, text: 'Percentage' }
+                    }
+                }
+            }
         });
 
-        // Memory Chart
+        // Memory Chart (0-100%)
         memoryChart = new Chart(memoryChartCtx, {
             type: 'line',
             data: {
@@ -46,10 +55,19 @@ document.addEventListener('DOMContentLoaded', function () {
                     borderColor: '#2ecc71',
                     backgroundColor: 'rgba(46, 204, 113, 0.2)',
                     fill: true,
-                    tension: 0.2
+                    tension: 0.1
                 }]
             },
-            options: getChartOptions('Percentage')
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        min: 0,
+                        max: 100,
+                        title: { display: true, text: 'Percentage' }
+                    }
+                }
+            }
         });
 
         // Network Chart
@@ -74,85 +92,65 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 ]
             },
-            options: getChartOptions('Bytes')
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Bytes' }
+                    }
+                }
+            }
         });
     }
 
-    function getChartOptions(yAxisLabel) {
-        return {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: yAxisLabel
-                    }
-                },
-                x: {
-                    ticks: {
-                        maxTicksLimit: 10,
-                        autoSkip: true
-                    }
-                }
-            },
-            plugins: {
-                legend: {
-                    position: 'top'
-                },
-                tooltip: {
-                    mode: 'index',
-                    intersect: false
-                }
-            }
-        };
-    }
-
     async function fetchData() {
-        showLoading();
-        updateRefreshTime();
+        if (isFetching) return;
+        isFetching = true;
         
         try {
+            updateRefreshTime();
+            
+            // Fetch containers and system info
             const [containersRes, systemRes] = await Promise.all([
-                fetch('/api/containers').catch(handleFetchError),
-                fetch('/api/system').catch(handleFetchError)
+                fetch('/api/containers'),
+                fetch('/api/system')
             ]);
 
-            const containers = await parseResponse(containersRes, 'containers');
-            const system = await parseResponse(systemRes, 'system info');
+            const containers = await containersRes.json();
+            const system = await systemRes.json();
 
             renderSystemInfo(system);
             renderContainers(containers);
 
             if (containers.length) {
-                const validContainer = containers.find(c => c.id === currentContainerId) || containers[0];
-                currentContainerId = validContainer.id;
+                if (!currentContainerId) {
+                    currentContainerId = containers[0].id;
+                }
                 await fetchStats(currentContainerId);
             } else {
+                statsContainer.innerHTML = '<div class="info-msg">No running containers</div>';
                 clearCharts();
-                statsContainer.innerHTML = '<div class="info-msg">No running containers found</div>';
             }
         } catch (error) {
-            showError('Failed to load dashboard data', error);
+            console.error('Fetch error:', error);
+            statsContainer.innerHTML = '<div class="error-msg">Failed to load data</div>';
         } finally {
-            hideLoading();
+            isFetching = false;
         }
     }
 
     async function fetchStats(containerId) {
-        showLoading();
-        
         try {
             const [statsRes, networkRes, logsRes] = await Promise.all([
-                fetch(`/api/stats/${containerId}`).catch(handleFetchError),
-                fetch(`/api/network/${containerId}`).catch(handleFetchError),
-                fetch(`/api/logs/${containerId}`).catch(handleFetchError)
+                fetch(`/api/stats/${containerId}`),
+                fetch(`/api/network/${containerId}`),
+                fetch(`/api/logs/${containerId}`)
             ]);
 
-            const stats = await parseResponse(statsRes, 'stats');
-            const network = await parseResponse(networkRes, 'network');
-            const logs = await parseResponse(logsRes, 'logs');
+            const stats = await statsRes.json();
+            const network = await networkRes.json();
+            const logs = await logsRes.json();
 
             renderStats(stats);
             updateNetworkDisplay(network);
@@ -160,18 +158,12 @@ document.addEventListener('DOMContentLoaded', function () {
             updateHistory(containerId, stats, network);
             updateAllCharts();
         } catch (error) {
-            showError('Failed to load container stats', error);
-        } finally {
-            hideLoading();
+            console.error('Stats error:', error);
+            statsContainer.innerHTML = '<div class="error-msg">Failed to load stats</div>';
         }
     }
 
     function renderSystemInfo(system) {
-        if (!system || Object.keys(system).length === 0) {
-            systemInfo.innerHTML = '<div class="error-msg">System information not available</div>';
-            return;
-        }
-
         systemInfo.innerHTML = `
             <h3>Docker System Information</h3>
             <div class="system-grid">
@@ -204,87 +196,54 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function renderContainers(containers) {
-        if (!containers || containers.length === 0) {
-            containersList.innerHTML = '<div class="info-msg">No containers found</div>';
-            return;
-        }
-
         containersList.innerHTML = containers.map(container => `
             <div class="container-item ${container.id === currentContainerId ? 'active' : ''}"
-                role="button" tabindex="0"
-                onclick="fetchStats('${container.id}')"
-                onkeypress="if(event.key==='Enter') fetchStats('${container.id}')">
+                onclick="window.fetchStats('${container.id}')">
                 <div class="container-header">
                     <span class="status-indicator ${container.status}"></span>
-                    <span class="container-name">${container.name || 'Unnamed'}</span>
+                    <span class="container-name">${container.name}</span>
                 </div>
-                <span class="container-image">${container.image || 'No image'}</span>
-                <span class="container-status">${container.status || 'Unknown'}</span>
+                <span class="container-image">${container.image}</span>
+                <span class="container-status">${container.status}</span>
             </div>
         `).join('');
     }
 
     function renderStats(stats) {
-        if (!stats || Object.keys(stats).length === 0) {
-            statsContainer.innerHTML = '<div class="error-msg">Statistics not available</div>';
-            return;
-        }
-
         statsContainer.innerHTML = `
             <h3>Real-time Statistics</h3>
             <div class="stat-item">
                 <label>CPU Usage:</label>
                 <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.cpu_percent || 0}%; background: ${getUsageColor(stats.cpu_percent || 0)}"></div>
-                    <span>${stats.cpu_percent || 0}%</span>
+                    <div class="progress" style="width: ${stats.cpu_percent}%; background: ${getUsageColor(stats.cpu_percent)}"></div>
+                    <span>${stats.cpu_percent}%</span>
                 </div>
             </div>
             <div class="stat-item">
                 <label>Memory Usage:</label>
                 <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.memory_percent || 0}%; background: ${getUsageColor(stats.memory_percent || 0)}"></div>
-                    <span>${formatBytes(stats.memory_usage || 0)} / ${formatBytes(stats.memory_limit || 0)} (${stats.memory_percent || 0}%)</span>
+                    <div class="progress" style="width: ${stats.memory_percent}%; background: ${getUsageColor(stats.memory_percent)}"></div>
+                    <span>${formatBytes(stats.memory_usage)} / ${formatBytes(stats.memory_limit)} (${stats.memory_percent}%)</span>
                 </div>
             </div>
-            <div class="stat-item"><label>Processes:</label><span>${stats.pids || 0}</span></div>
-            <div class="stat-item"><label>Last Updated:</label><span>${stats.time ? new Date(stats.time).toLocaleTimeString() : 'N/A'}</span></div>
+            <div class="stat-item"><label>Processes:</label><span>${stats.pids}</span></div>
+            <div class="stat-item"><label>Last Updated:</label><span>${new Date(stats.time).toLocaleTimeString()}</span></div>
         `;
     }
 
     function updateNetworkDisplay(network) {
-        if (!network) {
-            document.getElementById('rx-bytes').textContent = 'N/A';
-            document.getElementById('tx-bytes').textContent = 'N/A';
-            return;
-        }
-
         document.getElementById('rx-bytes').textContent = network.rx_bytes ? formatBytes(network.rx_bytes) : 'N/A';
         document.getElementById('tx-bytes').textContent = network.tx_bytes ? formatBytes(network.tx_bytes) : 'N/A';
     }
 
     function updateLogsDisplay(logs) {
-        const formatLogEntry = (log) => {
-            if (!log) return '';
-            const timestampMatch = log.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d+Z)/);
-            if (timestampMatch) {
-                return `<div class="log-line">
-                    <span class="log-time">${timestampMatch[1]}</span>
-                    ${log.replace(timestampMatch[0], '')}
-                </div>`;
-            }
-            return `<div class="log-line">${log}</div>`;
-        };
-
-        const accessLogs = document.getElementById('access-logs');
-        const errorLogs = document.getElementById('error-logs');
-
-        accessLogs.innerHTML = logs?.access?.length 
-            ? logs.access.map(formatLogEntry).join('')
-            : '<div class="info-msg">No access logs available</div>';
-
-        errorLogs.innerHTML = logs?.error?.length 
-            ? logs.error.map(log => `<div class="log-line error">${formatLogEntry(log)}</div>`).join('')
-            : '<div class="info-msg">No error logs available</div>';
+        document.getElementById('access-logs').innerHTML = logs.access?.length 
+            ? logs.access.join('\n') 
+            : 'No access logs available';
+            
+        document.getElementById('error-logs').innerHTML = logs.error?.length 
+            ? logs.error.join('\n') 
+            : 'No error logs available';
     }
 
     function updateHistory(containerId, stats, network) {
@@ -299,7 +258,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         const history = historyData[containerId];
-        const now = new Date(stats?.time || Date.now());
+        const now = new Date(stats.time);
 
         // Keep maximum 20 data points
         if (history.timestamps.length >= 20) {
@@ -312,27 +271,23 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Add new data
         history.timestamps.push(now.toLocaleTimeString());
-        history.cpu.push(stats?.cpu_percent || 0);
-        history.memory.push(stats?.memory_percent || 0);
-        history.rx.push(network?.rx_bytes || 0);
-        history.tx.push(network?.tx_bytes || 0);
+        history.cpu.push(stats.cpu_percent);
+        history.memory.push(stats.memory_percent);
+        history.rx.push(network.rx_bytes || 0);
+        history.tx.push(network.tx_bytes || 0);
     }
 
     function updateAllCharts() {
-        const history = currentContainerId ? historyData[currentContainerId] : null;
-        if (!history) return;
-
-        // CPU Chart
+        const history = historyData[currentContainerId];
+        
         cpuChart.data.labels = history.timestamps;
         cpuChart.data.datasets[0].data = history.cpu;
         cpuChart.update();
 
-        // Memory Chart
         memoryChart.data.labels = history.timestamps;
         memoryChart.data.datasets[0].data = history.memory;
         memoryChart.update();
 
-        // Network Chart
         networkChart.data.labels = history.timestamps;
         networkChart.data.datasets[0].data = history.rx;
         networkChart.data.datasets[1].data = history.tx;
@@ -354,9 +309,12 @@ document.addEventListener('DOMContentLoaded', function () {
         networkChart.update();
     }
 
-    // Helper Functions
+    function updateRefreshTime() {
+        refreshTime.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
+    }
+
     function formatBytes(bytes) {
-        if (typeof bytes !== 'number' || bytes === 0) return '0 Bytes';
+        if (!bytes) return '0 Bytes';
         const units = ['Bytes', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(1024));
         return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
@@ -368,68 +326,11 @@ document.addEventListener('DOMContentLoaded', function () {
         return '#e74c3c';
     }
 
-    function showLoading() {
-        if (loadingOverlay) loadingOverlay.style.display = 'flex';
-    }
-
-    function hideLoading() {
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
-    }
-
-    function updateRefreshTime() {
-        if (refreshTime) refreshTime.textContent = `Last updated: ${new Date().toLocaleTimeString()}`;
-    }
-
-    function showError(message, error) {
-        console.error(message, error);
-        const errorMsg = error?.message || 'Unknown error occurred';
-        statsContainer.innerHTML = `
-            <div class="error-msg">
-                <h4>${message}</h4>
-                <p>${errorMsg}</p>
-            </div>
-        `;
-    }
-
-    async function parseResponse(response, dataType) {
-        if (!response || !response.ok) {
-            throw new Error(`Failed to fetch ${dataType}`);
-        }
-        return await response.json();
-    }
-
-    function handleFetchError(error) {
-        console.error('Fetch error:', error);
-        return { ok: false };
-    }
-
-    // Global Functions
-    window.fetchStats = fetchStats;
-    window.switchLogs = function(type) {
-        document.querySelectorAll('.log-output').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.log-tab').forEach(el => el.classList.remove('active'));
-        document.getElementById(`${type}-logs`).classList.add('active');
-        document.querySelector(`[data-log-type="${type}"]`).classList.add('active');
-    };
-
-    window.filterLogs = function() {
-        const searchTerm = document.getElementById('log-search')?.value?.toLowerCase() || '';
-        const activeLogs = document.querySelector('.log-output.active');
-        if (!activeLogs) return;
-
-        Array.from(activeLogs.children).forEach(line => {
-            const text = line.textContent.toLowerCase();
-            line.style.display = text.includes(searchTerm) ? 'block' : 'none';
-        });
-    };
-
-    window.clearLogs = function() {
-        document.getElementById('access-logs').innerHTML = '<div class="info-msg">Logs cleared</div>';
-        document.getElementById('error-logs').innerHTML = '<div class="info-msg">Logs cleared</div>';
-    };
-
-    // Initialization
+    // Initialize and start updating
     initCharts();
     fetchData();
-    setInterval(fetchData, 2000); // Refresh every 2 seconds
+    setInterval(fetchData, 5000); // Update every 5 seconds
+
+    // Make functions available globally
+    window.fetchStats = fetchStats;
 });
