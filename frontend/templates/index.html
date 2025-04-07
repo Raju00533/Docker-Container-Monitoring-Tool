@@ -44,16 +44,24 @@
                 </div>
 
                 <!-- Logs Section -->
-                <div class="logs-section">
-                    <div class="log-box">
-                        <h3>Access Logs</h3>
-                        <pre id="access-logs" class="log-output">No logs yet...</pre>
-                    </div>
-                    <div class="log-box">
-                        <h3>Error Logs</h3>
-                        <pre id="error-logs" class="log-output">No logs yet...</pre>
-                    </div>
-                </div>
+                <!-- Replace logs-section with this -->
+<div class="logs-section">
+    <div class="log-controls">
+        <div class="log-tabs">
+            <button class="log-tab active" onclick="switchLogs('access')">Access Logs</button>
+            <button class="log-tab" onclick="switchLogs('error')">Error Logs</button>
+        </div>
+        <div class="log-search">
+            <input type="text" id="log-search" placeholder="Filter logs...">
+            <button onclick="filterLogs()">Search</button>
+        </div>
+    </div>
+    
+    <div class="log-boxes">
+        <pre id="access-logs" class="log-output active"></pre>
+        <pre id="error-logs" class="log-output"></pre>
+    </div>
+</div>
             </div>
         </div>
     </div>
