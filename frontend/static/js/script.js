@@ -239,27 +239,94 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('tx-bytes').textContent = network.tx_bytes ? formatBytes(network.tx_bytes) : 'N/A';
     }
 
+    // Enhanced log display function
     function updateLogsDisplay(logs) {
-        const formatLog = (log) => {
-            if (!log) return '';
-            // Handle both string logs and object logs
-            if (typeof log === 'object') {
-                return JSON.stringify(log, null, 2);
-            }
-            return log;
-        };
-
         const accessLogsElement = document.getElementById('access-logs');
         const errorLogsElement = document.getElementById('error-logs');
+        const logSearchInput = document.getElementById('log-search');
+        
+        // Store raw logs for filtering
+        window.currentLogs = logs || { access: [], error: [] };
 
-        accessLogsElement.innerHTML = logs.access?.length 
-            ? logs.access.map(log => `<div class="log-line">${formatLog(log)}</div>`).join('')
+        // Format log entries with syntax highlighting
+        const formatLogEntry = (log) => {
+            if (!log) return '';
+            
+            // HTTP Status Code Highlighting
+            log = log.replace(/(HTTP\/\d\.\d"\s+)(\d{3})/, 
+                '$1<span class="http-status $2">$2</span>');
+            
+            // Timestamp Highlighting
+            log = log.replace(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, 
+                '<span class="log-timestamp">$1</span>');
+            
+            // IP Address Highlighting
+            log = log.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/, 
+                '<span class="log-ip">$1</span>');
+            
+            // URL Highlighting
+            log = log.replace(/(GET|POST|PUT|DELETE)\s+([^\s]+)/, 
+                '<span class="log-method">$1</span> <span class="log-url">$2</span>');
+            
+            return `<div class="log-line">${log}</div>`;
+        };
+
+        // Initial render
+        accessLogsElement.innerHTML = window.currentLogs.access?.length 
+            ? window.currentLogs.access.map(formatLogEntry).join('')
             : '<div class="info-msg">No access logs available</div>';
 
-        errorLogsElement.innerHTML = logs.error?.length
-            ? logs.error.map(log => `<div class="log-line error">${formatLog(log)}</div>`).join('')
+        errorLogsElement.innerHTML = window.currentLogs.error?.length
+            ? window.currentLogs.error.map(log => 
+                `<div class="log-line error">${formatLogEntry(log)}</div>`).join('')
             : '<div class="info-msg">No error logs available</div>';
+
+        // Apply any existing search filter
+        if (logSearchInput.value) {
+            filterLogs();
+        }
     }
+
+    // Tab switching functionality
+    window.switchLogs = function(type) {
+        // Update active tab UI
+        document.querySelectorAll('.log-tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.logType === type);
+        });
+        
+        // Show the selected log type
+        document.querySelectorAll('.log-output').forEach(output => {
+            output.classList.toggle('active', output.id === `${type}-logs`);
+        });
+        
+        // Re-apply search filter to the newly visible logs
+        filterLogs();
+    };
+
+    // Log search functionality
+    window.filterLogs = function() {
+        const searchTerm = document.getElementById('log-search').value.toLowerCase();
+        const activeLogs = document.querySelector('.log-output.active');
+        
+        if (!activeLogs) return;
+        
+        Array.from(activeLogs.children).forEach(line => {
+            if (line.classList.contains('info-msg')) {
+                line.style.display = 'block';
+                return;
+            }
+            
+            const text = line.textContent.toLowerCase();
+            line.style.display = text.includes(searchTerm) ? 'block' : 'none';
+        });
+    };
+
+    // Clear logs search
+    window.clearLogSearch = function() {
+        document.getElementById('log-search').value = '';
+        filterLogs();
+    };
+
 
     function updateHistory(containerId, stats, network) {
         if (!historyData[containerId]) {
