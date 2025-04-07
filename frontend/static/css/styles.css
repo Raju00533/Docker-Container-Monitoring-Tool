@@ -6,18 +6,23 @@
     --dark-color: #2c3e50;
     --light-color: #ecf0f1;
     --gray-color: #95a5a6;
+    --border-color: #ddd;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --font-main: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: var(--font-main);
 }
 
 body {
     background-color: #f5f5f5;
     color: #333;
+    line-height: 1.6;
+    font-size: 16px;
 }
 
 .dashboard {
@@ -27,7 +32,7 @@ body {
 header {
     background-color: var(--dark-color);
     color: white;
-    padding: 1rem;
+    padding: 1rem 2rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -39,34 +44,34 @@ header {
 }
 
 .sidebar {
-    width: 300px;
-    background-color: white;
-    border-right: 1px solid #ddd;
+    width: 280px;
+    background-color: #fff;
+    border-right: 1px solid var(--border-color);
     padding: 1rem;
     overflow-y: auto;
-    height: 100vh;
 }
 
 .main-content {
     flex: 1;
-    padding: 1rem;
+    padding: 1.5rem;
     overflow-y: auto;
-    height:100vh;
+    background-color: #fafafa;
 }
 
 .containers-list {
-    margin-top: 1rem;
+    margin-top: 1.5rem;
 }
 
 .container-item {
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    border-radius: 4px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background-color 0.2s ease;
     display: flex;
     flex-direction: column;
-    border: 1px solid #eee;
+    border: 1px solid var(--border-color);
+    background-color: #fff;
 }
 
 .container-item:hover {
@@ -96,35 +101,39 @@ header {
 .container-name {
     font-weight: bold;
     margin-bottom: 0.25rem;
+    color: #2c3e50;
 }
 
 .container-image {
     color: var(--gray-color);
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     margin-bottom: 0.25rem;
 }
 
 .container-status {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     text-transform: capitalize;
+    color: #555;
 }
 
-.stats-container, .system-info {
-    background-color: white;
-    padding: 1rem;
-    border-radius: 4px;
-    margin-bottom: 1rem;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.stats-container,
+.system-info {
+    background-color: #fff;
+    padding: 1rem 1.5rem;
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
 }
 
 .stat-item {
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
 }
 
 .stat-item label {
     display: block;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.35rem;
     font-weight: bold;
+    color: #444;
 }
 
 .progress-bar {
@@ -138,7 +147,7 @@ header {
 .progress {
     height: 100%;
     background-color: var(--primary-color);
-    transition: width 0.3s;
+    transition: width 0.3s ease-in-out;
 }
 
 .progress-bar span {
@@ -147,24 +156,29 @@ header {
     left: 50%;
     transform: translate(-50%, -50%);
     font-size: 0.8rem;
-    
+    font-weight: 500;
+    color: #fff;
 }
 
 #charts {
     display: flex;
-    gap: 1rem;
-    margin-top: 1rem;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
 }
 
 .chart-container {
     flex: 1;
-    background-color: white;
-    padding: 1rem;
-    border-radius: 4px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 6px;
+    box-shadow: var(--shadow);
+    min-width: 300px;
 }
 
 #refresh-time {
-    font-size: 0.8rem;
-    color: #bbb;
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: right;
+    margin-top: 1rem;
 }
