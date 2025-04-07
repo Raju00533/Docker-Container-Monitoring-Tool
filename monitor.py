@@ -1,5 +1,4 @@
 import docker
-import time
 from datetime import datetime
 
 class DockerMonitor:
@@ -21,7 +20,7 @@ class DockerMonitor:
 
     def format_stats(self, stats):
         """Format raw stats into human-readable format"""
-        # CPU calculation - more robust handling
+        # CPU calculation
         cpu_percent = 0.0
         cpu_stats = stats.get('cpu_stats', {})
         precpu_stats = stats.get('precpu_stats', {})
@@ -31,19 +30,18 @@ class DockerMonitor:
                 cpu_delta = cpu_stats['cpu_usage']['total_usage'] - precpu_stats['cpu_usage']['total_usage']
                 system_delta = cpu_stats.get('system_cpu_usage', 0) - precpu_stats.get('system_cpu_usage', 0)
 
-                # Handle both old and new Docker API versions
-                cpu_count = len(cpu_stats['cpu_usage'].get('percpu_usage', [1]))  # Fallback to 1 CPU if not available
+                cpu_count = len(cpu_stats['cpu_usage'].get('percpu_usage', [1]))
 
                 if system_delta > 0 and cpu_delta > 0:
                     cpu_percent = (cpu_delta / system_delta) * cpu_count * 100
         except KeyError as e:
             print(f"CPU calculation warning: {e}")
-            cpu_percent = 0.0  # Fallback value
+            cpu_percent = 0.0
 
-        # Memory calculation
+        # Memory usage
         memory_stats = stats.get('memory_stats', {})
         mem_usage = memory_stats.get('usage', 0)
-        mem_limit = memory_stats.get('limit', 1)  # Avoid division by zero
+        mem_limit = memory_stats.get('limit', 1)
 
         return {
             'time': datetime.now().isoformat(),
@@ -54,3 +52,27 @@ class DockerMonitor:
             'network_io': stats.get('networks', {}),
             'pids': stats.get('pids_stats', {}).get('current', 0)
         }
+
+    def get_network_io(self, stats):
+        """Calculate total RX/TX bytes across all interfaces"""
+        try:
+            networks = stats.get("networks", {})
+            rx = sum(n.get("rx_bytes", 0) for n in networks.values())
+            tx = sum(n.get("tx_bytes", 0) for n in networks.values())
+            return {"rx_bytes": rx, "tx_bytes": tx}
+        except Exception as e:
+            return {"rx_bytes": 0, "tx_bytes": 0, "error": str(e)}
+
+    def get_container_logs(self, container_id, log_type="access", tail=100):
+        """Return access or error logs"""
+        try:
+            container = self.client.containers.get(container_id)
+            logs = container.logs(tail=tail).decode().splitlines()
+
+            # Basic pattern filter (can be improved per container type)
+            access_logs = [line for line in logs if "GET" in line or "POST" in line or "200" in line]
+            error_logs = [line for line in logs if "error" in line.lower() or "500" in line or "fail" in line.lower()]
+
+            return access_logs if log_type == "access" else error_logs
+        except Exception as e:
+            return [f"Error retrieving logs: {str(e)}"]
