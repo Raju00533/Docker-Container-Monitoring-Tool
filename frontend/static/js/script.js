@@ -13,7 +13,79 @@ document.addEventListener('DOMContentLoaded', function () {
     initCharts();
     fetchData();
     setInterval(fetchData, 2000);
+    // Add to chart initialization
+const networkChartCtx = document.getElementById('network-chart')?.getContext('2d');
+let networkChart;
 
+function initCharts() {
+    // ... existing charts ...
+    
+    // Network I/O Chart
+    networkChart = new Chart(networkChartCtx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'RX Bytes',
+                    data: [],
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                    fill: true
+                },
+                {
+                    label: 'TX Bytes',
+                    data: [],
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Bytes' }
+                }
+            }
+        }
+    });
+}
+
+// Add to updateHistory function
+history.networkRx = [];
+history.networkTx = [];
+
+// Add to fetchStats function
+fetch(`/api/network/${containerId}`)
+    .then(res => res.json())
+    .then(network => {
+        document.getElementById('rx-bytes').textContent = formatBytes(network.rx_bytes);
+        document.getElementById('tx-bytes').textContent = formatBytes(network.tx_bytes);
+        
+        // Update network history
+        history.networkRx.push(network.rx_bytes);
+        history.networkTx.push(network.tx_bytes);
+        
+        if (history.networkRx.length > 20) {
+            history.networkRx.shift();
+            history.networkTx.shift();
+        }
+        
+        updateNetworkChart();
+    });
+
+function updateNetworkChart() {
+    if (!currentContainerId || !historyData[currentContainerId]) return;
+    const history = historyData[currentContainerId];
+    
+    networkChart.data.labels = history.timestamps;
+    networkChart.data.datasets[0].data = history.networkRx;
+    networkChart.data.datasets[1].data = history.networkTx;
+    networkChart.update();
+}
     function fetchData() {
         updateRefreshTime();
 
