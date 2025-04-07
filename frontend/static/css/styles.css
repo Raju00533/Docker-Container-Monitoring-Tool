@@ -463,15 +463,46 @@ header {
     margin-top: 1rem;
 }
 
+/* Log Display Styles */
 .log-output {
-    height: 200px;
+    height: 300px;
     overflow-y: auto;
     background: #1e1e1e;
     color: #d4d4d4;
     padding: 1rem;
-    font-family: monospace;
-    white-space: pre;
     border-radius: 4px;
+    font-family: monospace;
+    white-space: pre-wrap;
+    margin-top: 0.5rem;
 }
 
+.log-line {
+    padding: 0.25rem 0;
+    line-height: 1.4;
+    border-bottom: 1px solid #333;
+}
+
+.log-line.error {
+    color: #ff6b6b;
+    background: rgba(255, 107, 107, 0.1);
+    padding: 0.5rem;
+    border-radius: 3px;
+    margin: 0.25rem 0;
+}
+
+.info-msg, .error-msg {
+    padding: 1rem;
+    border-radius: 4px;
+    margin: 0.5rem 0;
+}
+
+.info-msg {
+    background: rgba(52, 152, 219, 0.1);
+    color: #3498db;
+}
+
+.error-msg {
+    background: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+}
 
