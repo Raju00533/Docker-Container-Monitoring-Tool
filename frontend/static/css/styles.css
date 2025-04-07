@@ -49,6 +49,7 @@ header {
     border-right: 1px solid var(--border-color);
     padding: 1rem;
     overflow-y: auto;
+    height: 100vh;
 }
 
 .main-content {
