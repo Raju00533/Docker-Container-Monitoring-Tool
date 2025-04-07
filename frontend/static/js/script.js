@@ -39,7 +39,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         min: 0,
                         max: 100,
                         title: { display: true, text: 'Percentage' }
+                    },
+                    x: {
+                    type: 'time',
+                    time: {
+                        unit: 'hour',
+                        displayFormats: {
+                            hour: 'HH:mm'
+                        },
+                        tooltipFormat: 'MMM D, HH:mm'
+                    },
+                    title: {
+                        display: true,
+                        text: 'Time (24h)'
                     }
+                }
+                    
                 }
             }
         });
