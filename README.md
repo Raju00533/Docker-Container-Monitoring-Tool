@@ -10,6 +10,10 @@ Docker Container Monitoring Tool
 
 export DOCKER_HOST=unix:///var/run/docker.sock
 
+#Install the Required packages 
+
+pip install flask docker
+
 python3 main.py
 
 #by default it will run on the 8000 port. 
