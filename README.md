@@ -23,5 +23,6 @@ python3 main.py
 
 ### Dashboard: 
 
-![image](https://github.com/user-attachments/assets/2a066a9a-ac1b-495d-ae1d-993d37779a82)
 
+
+![image](https://github.com/user-attachments/assets/5925be56-d47e-4640-a433-6cda966c125b)
