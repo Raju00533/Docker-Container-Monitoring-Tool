@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, render_template
 from monitor import DockerMonitor
 import threading
+from db import init_db, insert_container_stats, insert_network_stats, insert_logs
 import time
 
 app = Flask(__name__, template_folder='./frontend/templates', static_folder='./frontend/static')
@@ -40,15 +41,18 @@ def background_monitor():
                     # Process and store stats
                     formatted_stats = monitor.format_stats(raw_stats)
                     container_data['stats'][container['id']] = formatted_stats
-                    
+                    insert_container_stats(container['id'], formatted_stats)
+
                     # Process and store network data
                     network_stats = monitor.get_network_io(raw_stats)
                     container_data['network'][container['id']] = network_stats
-                    
+                    insert_network_stats(container['id'], formatted_stats['time'], network_stats)
+
                     # Store logs (update less frequently to reduce load)
                     if time.time() % 10 < 2:  # Update logs every 10 seconds
                         container_logs = monitor.get_container_logs(container['id'])
                         container_data['logs'][container['id']] = container_logs
+                        insert_logs(container['id'], formatted_stats['time'], container_logs)
 
                 except Exception as e:
                     print(f"Error updating container {container['id']}: {str(e)}")
@@ -92,6 +96,7 @@ def index():
 
 if __name__ == '__main__':
     # Start background monitoring thread
+    init_db()
     thread = threading.Thread(target=background_monitor)
     thread.daemon = True
     thread.start()
