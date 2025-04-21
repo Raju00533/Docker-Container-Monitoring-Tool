@@ -4,85 +4,120 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Docker Container Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3498db',
+                        secondary: '#2ecc71',
+                        danger: '#e74c3c',
+                        warning: '#f39c12',
+                        dark: '#2c3e50',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
-    <div class="dashboard">
-        <header>
-            <h1>Docker Container Monitor</h1>
-            <div id="refresh-time"></div>
+<body class="bg-gray-100">
+    <div class="min-h-screen">
+        <header class="bg-dark text-white p-4 flex justify-between items-center shadow-md">
+            <h1 class="text-2xl font-bold">Docker Container Monitor</h1>
+            <div id="refresh-time" class="text-gray-300 text-sm"></div>
         </header>
         
-        <div class="container">
-            <div class="sidebar">
-                <h2>Containers</h2>
-                <div id="containers-list" class="containers-list"></div>
+        <div class="flex min-h-[calc(100vh-4rem)]">
+            <div class="w-72 bg-white border-r border-gray-200 p-4 overflow-y-auto">
+                <h2 class="text-lg font-semibold mb-4">Containers</h2>
+                <div id="containers-list" class="space-y-2"></div>
             </div>
             
-            <div class="main-content">
+            <div class="flex-1 p-6 overflow-y-auto">
                 <!-- System Info -->
-                <div id="system-info" class="system-info"></div>
+                <div id="system-info" class="bg-white rounded-lg shadow-md p-4 mb-6"></div>
+
+                <!-- Time Range Selector -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Time Range</h3>
+                    <div class="flex gap-4">
+                        <select id="time-range" class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                            <option value="1h">Last Hour</option>
+                            <option value="6h">Last 6 Hours</option>
+                            <option value="12h">Last 12 Hours</option>
+                            <option value="24h">Last 24 Hours</option>
+                            <option value="7d">Last 7 Days</option>
+                        </select>
+                        <button onclick="applyTimeRange()" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors">
+                            Apply
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Stats -->
-                <div id="stats-container" class="stats-container"></div>
+                <div id="stats-container" class="bg-white rounded-lg shadow-md p-4 mb-6"></div>
 
                 <!-- Network IO -->
-                <div class="network-io">
-                    <h3>Network I/O</h3>
-                    <div class="network-stats">
-                        <div class="network-stat">
-                            <span class="stat-label">RX Bytes:</span>
-                            <span class="stat-value" id="rx-bytes">0</span>
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <h3 class="text-lg font-semibold mb-4">Network I/O</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-4 rounded-md">
+                            <span class="text-gray-600">RX Bytes:</span>
+                            <span class="font-mono ml-2" id="rx-bytes">0</span>
                         </div>
-                        <div class="network-stat">
-                            <span class="stat-label">TX Bytes:</span>
-                            <span class="stat-value" id="tx-bytes">0</span>
+                        <div class="bg-gray-50 p-4 rounded-md">
+                            <span class="text-gray-600">TX Bytes:</span>
+                            <span class="font-mono ml-2" id="tx-bytes">0</span>
                         </div>
                     </div>
                 </div>
 
                 <!-- Charts -->
-                <div id="charts">
-                    <div class="chart-container">
+                <div id="charts" class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="bg-white rounded-lg shadow-md p-4">
                         <canvas id="cpu-chart"></canvas>
                     </div>
-                    <div class="chart-container">
+                    <div class="bg-white rounded-lg shadow-md p-4">
                         <canvas id="memory-chart"></canvas>
                     </div>
-                    <div class="chart-container">
+                    <div class="bg-white rounded-lg shadow-md p-4 lg:col-span-2">
                         <canvas id="network-chart"></canvas>
                     </div>
                 </div>
 
                 <!-- Logs Section -->
-                    <div class="logs-section">
-                        <div class="log-controls">
-                            <div class="log-tabs">
-                                <button class="log-tab active" data-log-type="access" onclick="switchLogs('access')">
-                                    Access Logs
-                                </button>
-                                <button class="log-tab" data-log-type="error" onclick="switchLogs('error')">
-                                    Error Logs
-                                </button>
-                            </div>
-                            <div class="log-search">
-                                <input type="text" id="log-search" placeholder="Search logs..." oninput="filterLogs()">
-                                <button onclick="clearLogSearch()">Clear</button>
-                            </div>
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <div class="flex flex-col md:flex-row justify-between gap-4 mb-4">
+                        <div class="flex border-b border-gray-200">
+                            <button class="log-tab px-4 py-2 border-b-2 border-primary text-primary" data-log-type="access" onclick="switchLogs('access')">
+                                Access Logs
+                            </button>
+                            <button class="log-tab px-4 py-2 border-b-2 border-transparent" data-log-type="error" onclick="switchLogs('error')">
+                                Error Logs
+                            </button>
                         </div>
-                        
-                        <pre id="access-logs" class="log-output active"></pre>
-                        <pre id="error-logs" class="log-output"></pre>
+                        <div class="flex gap-2">
+                            <input type="text" id="log-search" placeholder="Search logs..." 
+                                class="border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                                oninput="filterLogs()">
+                            <button onclick="clearLogSearch()" 
+                                class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition-colors">
+                                Clear
+                            </button>
+                        </div>
                     </div>
-
+                    
+                    <pre id="access-logs" class="log-output bg-gray-50 p-4 rounded-md font-mono text-sm overflow-x-auto"></pre>
+                    <pre id="error-logs" class="log-output hidden bg-gray-50 p-4 rounded-md font-mono text-sm overflow-x-auto"></pre>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Loading Overlay -->
-    <div id="loading-overlay" class="loading-overlay">
-        <div class="loading-spinner"></div>
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+        <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
