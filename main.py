@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, render_template
 from flask_cors import CORS
 import docker
 from datetime import datetime
@@ -11,7 +11,11 @@ import logging
 from functools import lru_cache
 import os
 
-app = Flask(__name__, static_folder='./frontend/build', static_url_path='')
+app = Flask(__name__, 
+    template_folder='./frontend/templates',
+    static_folder='./frontend/static',
+    static_url_path='/static'
+)
 CORS(app)
 
 # Configure logging
@@ -84,7 +88,7 @@ def background_monitor():
 def serve():
     """Serve the frontend application"""
     try:
-        return send_from_directory(app.static_folder, 'index.html')
+        return render_template('index.html')
     except Exception as e:
         logger.error(f"Error serving frontend: {str(e)}")
         return jsonify({'error': 'Frontend not found'}), 404
