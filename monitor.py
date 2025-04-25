@@ -91,7 +91,7 @@ class DockerMonitor:
                     access_logs.append(log)
     
             return {
-                'access': access_logs[-tail:],  # Return only the requested number of lines
+                'access': access_logs[-tail:],  
                 'error': error_logs[-tail:],
                 'raw': logs[-tail:]
             }
