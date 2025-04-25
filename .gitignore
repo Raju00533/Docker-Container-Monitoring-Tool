@@ -1,4 +1,8 @@
 monitor.db
 myenv
-__pycache__
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.cpython-310.pyc
 
