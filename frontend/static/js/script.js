@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statsContainer = document.getElementById('stats-container');
     const systemInfo = document.getElementById('system-info');
     const refreshTime = document.getElementById('refresh-time');
+    const timeRangeSelect = document.getElementById('time-range');
     
     // Chart Contexts
     const cpuChartCtx = document.getElementById('cpu-chart').getContext('2d');
@@ -13,16 +14,46 @@ document.addEventListener('DOMContentLoaded', function() {
     // Chart Instances
     let cpuChart, memoryChart, networkChart;
     let currentContainerId = localStorage.getItem('selectedContainerId') || null;
-    const historyData = {};
+    const historyData = {
+        cpu: [],
+        memory: [],
+        network: {
+            rx: [],
+            tx: []
+        }
+    };
     let isFetching = false;
+    let currentTimeRange = '1h';
 
     // Initialize all charts
     function initCharts() {
-        // CPU Chart (0-100%)
+        const chartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: {
+                duration: 0
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'minute',
+                        displayFormats: {
+                            minute: 'HH:mm'
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Time'
+                    }
+                }
+            }
+        };
+
+        // CPU Chart
         cpuChart = new Chart(cpuChartCtx, {
             type: 'line',
             data: {
-                labels: [],
                 datasets: [{
                     label: 'CPU Usage %',
                     data: [],
@@ -33,23 +64,22 @@ document.addEventListener('DOMContentLoaded', function() {
                 }]
             },
             options: {
-                responsive: true,
+                ...chartOptions,
                 scales: {
+                    ...chartOptions.scales,
                     y: {
                         min: 0,
                         max: 100,
                         title: { display: true, text: 'Percentage' }
                     }
-                    
                 }
             }
         });
 
-        // Memory Chart (0-100%)
+        // Memory Chart
         memoryChart = new Chart(memoryChartCtx, {
             type: 'line',
             data: {
-                labels: [],
                 datasets: [{
                     label: 'Memory Usage %',
                     data: [],
@@ -60,8 +90,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 }]
             },
             options: {
-                responsive: true,
+                ...chartOptions,
                 scales: {
+                    ...chartOptions.scales,
                     y: {
                         min: 0,
                         max: 100,
@@ -75,7 +106,6 @@ document.addEventListener('DOMContentLoaded', function() {
         networkChart = new Chart(networkChartCtx, {
             type: 'line',
             data: {
-                labels: [],
                 datasets: [
                     {
                         label: 'RX Bytes',
@@ -94,8 +124,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 ]
             },
             options: {
-                responsive: true,
+                ...chartOptions,
                 scales: {
+                    ...chartOptions.scales,
                     y: {
                         beginAtZero: true,
                         title: { display: true, text: 'Bytes' }
@@ -125,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
             renderContainers(containers);
 
             if (containers.length) {
-                // Check if stored container still exists
                 const validContainer = containers.find(c => c.id === currentContainerId) || containers[0];
                 if (currentContainerId !== validContainer.id) {
                     currentContainerId = validContainer.id;
@@ -133,12 +163,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 await fetchStats(currentContainerId);
             } else {
-                statsContainer.innerHTML = '<div class="info-msg">No running containers</div>';
+                statsContainer.innerHTML = '<div class="text-gray-600">No running containers</div>';
                 clearCharts();
             }
         } catch (error) {
             console.error('Fetch error:', error);
-            statsContainer.innerHTML = '<div class="error-msg">Failed to load data</div>';
+            statsContainer.innerHTML = '<div class="text-red-600">Failed to load data</div>';
         } finally {
             isFetching = false;
         }
@@ -147,9 +177,9 @@ document.addEventListener('DOMContentLoaded', function() {
     async function fetchStats(containerId) {
         try {
             const [statsRes, networkRes, logsRes] = await Promise.all([
-                fetch(`/api/stats/${containerId}`),
-                fetch(`/api/network/${containerId}`),
-                fetch(`/api/logs/${containerId}`)
+                fetch(`/api/stats/${containerId}?timeRange=${currentTimeRange}`),
+                fetch(`/api/network/${containerId}?timeRange=${currentTimeRange}`),
+                fetch(`/api/logs/${containerId}?timeRange=${currentTimeRange}`)
             ]);
 
             const stats = await statsRes.json();
@@ -163,37 +193,37 @@ document.addEventListener('DOMContentLoaded', function() {
             updateAllCharts();
         } catch (error) {
             console.error('Stats error:', error);
-            statsContainer.innerHTML = '<div class="error-msg">Failed to load stats</div>';
+            statsContainer.innerHTML = '<div class="text-red-600">Failed to load stats</div>';
         }
     }
 
     function renderSystemInfo(system) {
         systemInfo.innerHTML = `
-            <h3>Docker System Information</h3>
-            <div class="system-grid">
-                <div class="system-item">
-                    <label>Containers:</label>
-                    <span>${system.ContainersRunning || 0} running / ${system.Containers || 0} total</span>
+            <h3 class="text-lg font-semibold mb-4">Docker System Information</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">Containers:</span>
+                    <span class="ml-2">${system.ContainersRunning || 0} running / ${system.Containers || 0} total</span>
                 </div>
-                <div class="system-item">
-                    <label>Images:</label>
-                    <span>${system.Images || 0}</span>
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">Images:</span>
+                    <span class="ml-2">${system.Images || 0}</span>
                 </div>
-                <div class="system-item">
-                    <label>Docker Version:</label>
-                    <span>${system.ServerVersion || 'N/A'}</span>
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">Docker Version:</span>
+                    <span class="ml-2">${system.ServerVersion || 'N/A'}</span>
                 </div>
-                <div class="system-item">
-                    <label>OS:</label>
-                    <span>${system.OperatingSystem || 'N/A'}</span>
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">OS:</span>
+                    <span class="ml-2">${system.OperatingSystem || 'N/A'}</span>
                 </div>
-                <div class="system-item">
-                    <label>Hostname:</label>
-                    <span>${system.Name || 'N/A'}</span>
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">Hostname:</span>
+                    <span class="ml-2">${system.Name || 'N/A'}</span>
                 </div>
-                <div class="system-item">
-                    <label>Memory:</label>
-                    <span>${system.MemTotal ? formatBytes(system.MemTotal) : 'N/A'}</span>
+                <div class="bg-gray-50 p-3 rounded-md">
+                    <span class="text-gray-600">Memory:</span>
+                    <span class="ml-2">${system.MemTotal ? formatBytes(system.MemTotal) : 'N/A'}</span>
                 </div>
             </div>
         `;
@@ -201,37 +231,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function renderContainers(containers) {
         containersList.innerHTML = containers.map(container => `
-            <div class="container-item ${container.id === currentContainerId ? 'active' : ''}"
+            <div class="container-item ${container.id === currentContainerId ? 'bg-primary bg-opacity-10 border-primary' : 'bg-white border-gray-200'} 
+                border rounded-md p-3 cursor-pointer transition-colors hover:bg-gray-50"
                 onclick="selectContainer('${container.id}')">
-                <div class="container-header">
-                    <span class="status-indicator ${container.status}"></span>
-                    <span class="container-name">${container.name}</span>
+                <div class="flex items-center mb-1">
+                    <span class="status-indicator ${container.status} w-3 h-3 rounded-full mr-2"></span>
+                    <span class="font-semibold">${container.name}</span>
                 </div>
-                <span class="container-image">${container.image}</span>
-                <span class="container-status">${container.status}</span>
+                <div class="text-sm text-gray-600">${container.image}</div>
+                <div class="text-sm text-gray-500">${container.status}</div>
             </div>
         `).join('');
     }
 
     function renderStats(stats) {
         statsContainer.innerHTML = `
-            <h3>Real-time Statistics</h3>
-            <div class="stat-item">
-                <label>CPU Usage:</label>
-                <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.cpu_percent}%; background: ${getUsageColor(stats.cpu_percent)}"></div>
-                    <span>${stats.cpu_percent}%</span>
+            <h3 class="text-lg font-semibold mb-4">Real-time Statistics</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-gray-600 mb-1">CPU Usage:</label>
+                    <div class="h-6 bg-gray-200 rounded-full overflow-hidden">
+                        <div class="h-full ${getUsageColorClass(stats.cpu_percent)} transition-all duration-300" 
+                            style="width: ${stats.cpu_percent}%">
+                            <span class="text-white text-sm px-2">${stats.cpu_percent}%</span>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-gray-600 mb-1">Memory Usage:</label>
+                    <div class="h-6 bg-gray-200 rounded-full overflow-hidden">
+                        <div class="h-full ${getUsageColorClass(stats.memory_percent)} transition-all duration-300" 
+                            style="width: ${stats.memory_percent}%">
+                            <span class="text-white text-sm px-2">
+                                ${formatBytes(stats.memory_usage)} / ${formatBytes(stats.memory_limit)} (${stats.memory_percent}%)
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-600">Processes:</span>
+                    <span class="font-semibold">${stats.pids}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-600">Last Updated:</span>
+                    <span class="font-semibold">${new Date(stats.time).toLocaleTimeString()}</span>
                 </div>
             </div>
-            <div class="stat-item">
-                <label>Memory Usage:</label>
-                <div class="progress-bar">
-                    <div class="progress" style="width: ${stats.memory_percent}%; background: ${getUsageColor(stats.memory_percent)}"></div>
-                    <span>${formatBytes(stats.memory_usage)} / ${formatBytes(stats.memory_limit)} (${stats.memory_percent}%)</span>
-                </div>
-            </div>
-            <div class="stat-item"><label>Processes:</label><span>${stats.pids}</span></div>
-            <div class="stat-item"><label>Last Updated:</label><span>${new Date(stats.time).toLocaleTimeString()}</span></div>
         `;
     }
 
@@ -240,157 +285,78 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('tx-bytes').textContent = network.tx_bytes ? formatBytes(network.tx_bytes) : 'N/A';
     }
 
-    // Enhanced log display function
     function updateLogsDisplay(logs) {
         const accessLogsElement = document.getElementById('access-logs');
         const errorLogsElement = document.getElementById('error-logs');
         const logSearchInput = document.getElementById('log-search');
         
-        // Store raw logs for filtering
         window.currentLogs = logs || { access: [], error: [] };
-
-        // Format log entries with syntax highlighting
+        
         const formatLogEntry = (log) => {
-            if (!log) return '';
-            
-            // HTTP Status Code Highlighting
-            log = log.replace(/(HTTP\/\d\.\d"\s+)(\d{3})/, 
-                '$1<span class="http-status $2">$2</span>');
-            
-            // Timestamp Highlighting
-            log = log.replace(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/, 
-                '<span class="log-timestamp">$1</span>');
-            
-            // IP Address Highlighting
-            log = log.replace(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/, 
-                '<span class="log-ip">$1</span>');
-            
-            // URL Highlighting
-            log = log.replace(/(GET|POST|PUT|DELETE)\s+([^\s]+)/, 
-                '<span class="log-method">$1</span> <span class="log-url">$2</span>');
-            
-            return `<div class="log-line">${log}</div>`;
+            const timestamp = log.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)/);
+            if (timestamp) {
+                const time = new Date(timestamp[1]).toLocaleTimeString();
+                const content = log.slice(timestamp[0].length).trim();
+                return `<span class="text-gray-500">[${time}]</span> ${content}`;
+            }
+            return log;
         };
 
-        // Initial render
-        accessLogsElement.innerHTML = window.currentLogs.access?.length 
-            ? window.currentLogs.access.map(formatLogEntry).join('')
-            : '<div class="info-msg">No access logs available</div>';
-
-        errorLogsElement.innerHTML = window.currentLogs.error?.length
-            ? window.currentLogs.error.map(log => 
-                `<div class="log-line error">${formatLogEntry(log)}</div>`).join('')
-            : '<div class="info-msg">No error logs available</div>';
-
-        // Apply any existing search filter
-        if (logSearchInput.value) {
-            filterLogs();
-        }
+        accessLogsElement.innerHTML = logs.access.map(formatLogEntry).join('\n');
+        errorLogsElement.innerHTML = logs.error.map(formatLogEntry).join('\n');
     }
 
-    // Tab switching functionality
-    window.switchLogs = function(type) {
-        // Update active tab UI
-        document.querySelectorAll('.log-tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.logType === type);
-        });
-        
-        // Show the selected log type
-        document.querySelectorAll('.log-output').forEach(output => {
-            output.classList.toggle('active', output.id === `${type}-logs`);
-        });
-        
-        // Re-apply search filter to the newly visible logs
-        filterLogs();
-    };
-
-    // Log search functionality
-    window.filterLogs = function() {
-        const searchTerm = document.getElementById('log-search').value.toLowerCase();
-        const activeLogs = document.querySelector('.log-output.active');
-        
-        if (!activeLogs) return;
-        
-        Array.from(activeLogs.children).forEach(line => {
-            if (line.classList.contains('info-msg')) {
-                line.style.display = 'block';
-                return;
-            }
-            
-            const text = line.textContent.toLowerCase();
-            line.style.display = text.includes(searchTerm) ? 'block' : 'none';
-        });
-    };
-
-    // Clear logs search
-    window.clearLogSearch = function() {
-        document.getElementById('log-search').value = '';
-        filterLogs();
-    };
-
-
     function updateHistory(containerId, stats, network) {
-        if (!historyData[containerId]) {
-            historyData[containerId] = {
-                timestamps: [],
-                cpu: [],
-                memory: [],
-                rx: [],
-                tx: []
-            };
-        }
+        const now = new Date();
+        
+        // Update CPU history
+        historyData.cpu.push({
+            x: now,
+            y: stats.cpu_percent
+        });
+        
+        // Update memory history
+        historyData.memory.push({
+            x: now,
+            y: stats.memory_percent
+        });
+        
+        // Update network history
+        historyData.network.rx.push({
+            x: now,
+            y: network.rx_bytes || 0
+        });
+        historyData.network.tx.push({
+            x: now,
+            y: network.tx_bytes || 0
+        });
 
-        const history = historyData[containerId];
-        const now = new Date(stats.time);
-
-        // Keep maximum 20 data points
-        if (history.timestamps.length >= 20) {
-            history.timestamps.shift();
-            history.cpu.shift();
-            history.memory.shift();
-            history.rx.shift();
-            history.tx.shift();
-        }
-
-        // Add new data
-        history.timestamps.push(now.toLocaleTimeString());
-        history.cpu.push(stats.cpu_percent);
-        history.memory.push(stats.memory_percent);
-        history.rx.push(network.rx_bytes || 0);
-        history.tx.push(network.tx_bytes || 0);
+        // Trim history based on time range
+        const trimTime = new Date(now.getTime() - getTimeRangeMs(currentTimeRange));
+        historyData.cpu = historyData.cpu.filter(point => point.x >= trimTime);
+        historyData.memory = historyData.memory.filter(point => point.x >= trimTime);
+        historyData.network.rx = historyData.network.rx.filter(point => point.x >= trimTime);
+        historyData.network.tx = historyData.network.tx.filter(point => point.x >= trimTime);
     }
 
     function updateAllCharts() {
-        const history = historyData[currentContainerId];
-        if (!history) return;
+        cpuChart.data.datasets[0].data = historyData.cpu;
+        memoryChart.data.datasets[0].data = historyData.memory;
+        networkChart.data.datasets[0].data = historyData.network.rx;
+        networkChart.data.datasets[1].data = historyData.network.tx;
         
-        cpuChart.data.labels = history.timestamps;
-        cpuChart.data.datasets[0].data = history.cpu;
         cpuChart.update();
-
-        memoryChart.data.labels = history.timestamps;
-        memoryChart.data.datasets[0].data = history.memory;
         memoryChart.update();
-
-        networkChart.data.labels = history.timestamps;
-        networkChart.data.datasets[0].data = history.rx;
-        networkChart.data.datasets[1].data = history.tx;
         networkChart.update();
     }
 
     function clearCharts() {
-        cpuChart.data.labels = [];
-        cpuChart.data.datasets[0].data = [];
-        cpuChart.update();
-
-        memoryChart.data.labels = [];
-        memoryChart.data.datasets[0].data = [];
-        memoryChart.update();
-
-        networkChart.data.labels = [];
-        networkChart.data.datasets[0].data = [];
-        networkChart.data.datasets[1].data = [];
-        networkChart.update();
+        historyData.cpu = [];
+        historyData.memory = [];
+        historyData.network.rx = [];
+        historyData.network.tx = [];
+        
+        updateAllCharts();
     }
 
     function updateRefreshTime() {
@@ -398,32 +364,88 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function formatBytes(bytes) {
-        if (!bytes) return '0 Bytes';
-        const units = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${units[i]}`;
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
-    function getUsageColor(percent) {
-        if (percent < 50) return '#2ecc71';
-        if (percent < 80) return '#f39c12';
-        return '#e74c3c';
+    function getUsageColorClass(percent) {
+        if (percent < 50) return 'bg-green-500';
+        if (percent < 80) return 'bg-yellow-500';
+        return 'bg-red-500';
     }
 
-    // Container selection handler
-    window.selectContainer = function(containerId) {
-        currentContainerId = containerId;
-        localStorage.setItem('selectedContainerId', containerId);
-        fetchStats(containerId);
-        
-        // Update active state in UI
-        document.querySelectorAll('.container-item').forEach(item => {
-            item.classList.toggle('active', item.getAttribute('onclick').includes(containerId));
-        });
-    };
+    function getTimeRangeMs(range) {
+        const ranges = {
+            '1h': 60 * 60 * 1000,
+            '6h': 6 * 60 * 60 * 1000,
+            '12h': 12 * 60 * 60 * 1000,
+            '24h': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000
+        };
+        return ranges[range] || ranges['1h'];
+    }
 
-    // Initialize and start updating
+    // Initialize
     initCharts();
     fetchData();
-    setInterval(fetchData, 5000); // Update every 5 seconds
+    setInterval(fetchData, 5000);
 });
+
+// Global functions
+function selectContainer(containerId) {
+    window.currentContainerId = containerId;
+    localStorage.setItem('selectedContainerId', containerId);
+    document.querySelectorAll('.container-item').forEach(item => {
+        item.classList.remove('bg-primary', 'bg-opacity-10', 'border-primary');
+        item.classList.add('bg-white', 'border-gray-200');
+    });
+    document.querySelector(`[onclick="selectContainer('${containerId}')"]`).classList.add('bg-primary', 'bg-opacity-10', 'border-primary');
+    window.fetchStats(containerId);
+}
+
+function switchLogs(type) {
+    document.querySelectorAll('.log-tab').forEach(tab => {
+        tab.classList.remove('border-primary', 'text-primary');
+        tab.classList.add('border-transparent');
+    });
+    document.querySelector(`[data-log-type="${type}"]`).classList.add('border-primary', 'text-primary');
+    
+    document.querySelectorAll('.log-output').forEach(output => {
+        output.classList.add('hidden');
+    });
+    document.getElementById(`${type}-logs`).classList.remove('hidden');
+}
+
+function filterLogs() {
+    const searchTerm = document.getElementById('log-search').value.toLowerCase();
+    const activeLogType = document.querySelector('.log-tab.border-primary').dataset.logType;
+    const logsElement = document.getElementById(`${activeLogType}-logs`);
+    
+    const logs = window.currentLogs[activeLogType];
+    logsElement.innerHTML = logs
+        .filter(log => log.toLowerCase().includes(searchTerm))
+        .map(log => {
+            const timestamp = log.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)/);
+            if (timestamp) {
+                const time = new Date(timestamp[1]).toLocaleTimeString();
+                const content = log.slice(timestamp[0].length).trim();
+                return `<span class="text-gray-500">[${time}]</span> ${content}`;
+            }
+            return log;
+        })
+        .join('\n');
+}
+
+function clearLogSearch() {
+    document.getElementById('log-search').value = '';
+    filterLogs();
+}
+
+function applyTimeRange() {
+    const timeRange = document.getElementById('time-range').value;
+    window.currentTimeRange = timeRange;
+    window.fetchStats(window.currentContainerId);
+}
